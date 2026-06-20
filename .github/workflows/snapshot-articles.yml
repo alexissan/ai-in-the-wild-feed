@@ -1,0 +1,31 @@
+name: Snapshot latest articles
+
+on:
+  schedule:
+    # Your site's own poll runs at 07:00 UTC; snapshot just after so the
+    # digest routine (Mon/Wed/Fri 08:00 UTC) always reads fresh data.
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}        # lets you run it manually too
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch latest articles from the API
+        run: |
+          mkdir -p data
+          curl -fsSL "https://ai-in-the-wild.vercel.app/api/articles?limit=12" \
+            -o data/latest-articles.json
+          jq -e '.articles | type == "array" and length > 0' \
+            data/latest-articles.json > /dev/null   # bail if not valid/non-empty
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest-articles.json
+          git diff --cached --quiet || { \
+            git commit -m "chore: snapshot latest articles feed"; git push; }
